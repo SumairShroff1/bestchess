@@ -25,8 +25,7 @@
 			book = BookCreator.LoadBookFromFile (settings.book);
 		}
 
-		// Update running on Unity main thread. This is used to return the chosen move so as
-		// not to end up on a different thread and unable to interface with Unity stuff.
+		
 		public override void Update () {
 			if (moveFound) {
 				moveFound = false;
@@ -82,7 +81,6 @@
 
 		}
 
-		// Note: called outside of Unity main thread
 		void TimeOutThreadedSearch () {
 			if (cancelSearchTimer == null || !cancelSearchTimer.IsCancellationRequested) {
 				search.EndSearch ();
@@ -95,7 +93,6 @@
 		}
 
 		void OnSearchComplete (Move move) {
-			// Cancel search timer in case search finished before timer ran out (can happen when a mate is found)
 			cancelSearchTimer?.Cancel ();
 			moveFound = true;
 			this.move = move;
