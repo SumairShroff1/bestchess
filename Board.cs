@@ -8,8 +8,7 @@ namespace Chess {
 		public const int WhiteIndex = 0;
 		public const int BlackIndex = 1;
 
-		// Stores piece code for each square on the board.
-		// Piece code is defined as piecetype | colour code
+		
 		public int[] Square;
 
 		public bool WhiteToMove;
@@ -17,10 +16,7 @@ namespace Chess {
 		public int OpponentColour;
 		public int ColourToMoveIndex;
 
-		// Bits 0-3 store white and black kingside/queenside castling legality
-		// Bits 4-7 store file of ep square (starting at 1, so 0 = no ep square)
-		// Bits 8-13 captured piece
-		// Bits 14-... fifty mover counter
+		
 		Stack<uint> gameStateHistory;
 		public uint currentGameState;
 
@@ -28,10 +24,9 @@ namespace Chess {
 		public int fiftyMoveCounter; // Num ply since last pawn move or capture
 
 		public ulong ZobristKey;
-		/// List of zobrist keys 
 		public Stack<ulong> RepetitionPositionHistory;
 
-		public int[] KingSquare; // index of square of white and black king
+		public int[] KingSquare; 
 
 		public PieceList[] rooks;
 		public PieceList[] bishops;
@@ -53,8 +48,7 @@ namespace Chess {
 			return allPieceLists[colourIndex * 8 + pieceType];
 		}
 
-		// Make a move on the board
-		// The inSearch parameter controls whether this move should be recorded in the game history (for detecting three-fold repetition)
+		
 		public int GetCapturedPiece(Move move) {
 			int capturedPieceType = Piece.PieceType(Square[move.TargetSquare]);
 			return capturedPieceType;
@@ -79,14 +73,12 @@ namespace Chess {
 			bool isPromotion = move.IsPromotion;
 			bool isEnPassant = moveFlag == Move.Flag.EnPassantCapture;
 
-			// Handle captures
 			currentGameState |= (ushort) (capturedPieceType << 8);
 			if (capturedPieceType != 0 && !isEnPassant) {
 				ZobristKey ^= Zobrist.piecesArray[capturedPieceType, opponentColourIndex, moveTo];
 				GetPieceList (capturedPieceType, opponentColourIndex).RemovePieceAtSquare (moveTo);
 			}
 
-			// Move pieces in piece lists
 			if (movePieceType == Piece.King) {
 				KingSquare[ColourToMoveIndex] = moveTo;
 				newCastleState &= (WhiteToMove) ? whiteCastleMask : blackCastleMask;
@@ -96,7 +88,6 @@ namespace Chess {
 
 			int pieceOnTargetSquare = movePiece;
 
-			// Handle promotion
 			if (isPromotion) {
 				int promoteType = 0;
 				switch (moveFlag) {
@@ -121,7 +112,6 @@ namespace Chess {
 				pieceOnTargetSquare = promoteType | ColourToMove;
 				pawns[ColourToMoveIndex].RemovePieceAtSquare (moveTo);
 			} else {
-				// Handle other special moves (en-passant, and castling)
 				switch (moveFlag) {
 					case Move.Flag.EnPassantCapture:
 						int epPawnSquare = moveTo + ((ColourToMove == Piece.White) ? -8 : 8);
@@ -145,18 +135,15 @@ namespace Chess {
 				}
 			}
 
-			// Update the board representation:
 			Square[moveTo] = pieceOnTargetSquare;
 			Square[moveFrom] = 0;
 
-			// Pawn has moved two forwards, mark file with en-passant flag
 			if (moveFlag == Move.Flag.PawnTwoForward) {
 				int file = BoardRepresentation.FileIndex (moveFrom) + 1;
 				currentGameState |= (ushort) (file << 4);
 				ZobristKey ^= Zobrist.enPassantFile[file];
 			}
 
-			// Piece moving to/from rook square removes castling right for that side
 			if (originalCastleState != 0) {
 				if (moveTo == BoardRepresentation.h1 || moveFrom == BoardRepresentation.h1) {
 					newCastleState &= whiteCastleKingsideMask;
@@ -170,7 +157,6 @@ namespace Chess {
 				}
 			}
 
-			// Update zobrist key with new piece position and side to move
 			ZobristKey ^= Zobrist.sideToMove;
 			ZobristKey ^= Zobrist.piecesArray[movePieceType, ColourToMoveIndex, moveFrom];
 			ZobristKey ^= Zobrist.piecesArray[Piece.PieceType (pieceOnTargetSquare), ColourToMoveIndex, moveTo];
@@ -186,7 +172,6 @@ namespace Chess {
 			currentGameState |= (uint) fiftyMoveCounter << 14;
 			gameStateHistory.Push (currentGameState);
 
-			// Change side to move
 			WhiteToMove = !WhiteToMove;
 			ColourToMove = (WhiteToMove) ? Piece.White : Piece.Black;
 			OpponentColour = (WhiteToMove) ? Piece.Black : Piece.White;
@@ -205,10 +190,8 @@ namespace Chess {
 
 		}
 
-		// Undo a move previously made on the board
 		public void UnmakeMove (Move move, bool inSearch = false) {
 
-			//int opponentColour = ColourToMove;
 			int opponentColourIndex = ColourToMoveIndex;
 			bool undoingWhiteMove = OpponentColour == Piece.White;
 			ColourToMove = OpponentColour; // side who made the move we are undoing
@@ -230,7 +213,6 @@ namespace Chess {
 			int toSquarePieceType = Piece.PieceType (Square[movedTo]);
 			int movedPieceType = (isPromotion) ? Piece.Pawn : toSquarePieceType;
 
-			// Update zobrist key with new piece position and side to move
 			ZobristKey ^= Zobrist.sideToMove;
 			ZobristKey ^= Zobrist.piecesArray[movedPieceType, ColourToMoveIndex, movedFrom]; // add piece back to square it moved from
 			ZobristKey ^= Zobrist.piecesArray[toSquarePieceType, ColourToMoveIndex, movedTo]; // remove piece from square it moved to
@@ -239,20 +221,17 @@ namespace Chess {
 			if (oldEnPassantFile != 0)
 				ZobristKey ^= Zobrist.enPassantFile[oldEnPassantFile];
 
-			// ignore ep captures, handled later
 			if (capturedPieceType != 0 && !isEnPassant) {
 				ZobristKey ^= Zobrist.piecesArray[capturedPieceType, opponentColourIndex, movedTo];
 				GetPieceList (capturedPieceType, opponentColourIndex).AddPieceAtSquare (movedTo);
 			}
 
-			// Update king index
 			if (movedPieceType == Piece.King) {
 				KingSquare[ColourToMoveIndex] = movedFrom;
 			} else if (!isPromotion) {
 				GetPieceList (movedPieceType, ColourToMoveIndex).MovePiece (movedTo, movedFrom);
 			}
 
-			// put back moved piece
 			Square[movedFrom] = movedPieceType | ColourToMove; // note that if move was a pawn promotion, this will put the promoted piece back instead of the pawn. Handled in special move switch
 			Square[movedTo] = capturedPiece; // will be 0 if no piece was captured
 
@@ -272,13 +251,13 @@ namespace Chess {
 						bishops[ColourToMoveIndex].RemovePieceAtSquare (movedTo);
 						break;
 				}
-			} else if (isEnPassant) { // ep cature: put captured pawn back on right square
+			} else if (isEnPassant) { 
 				int epIndex = movedTo + ((ColourToMove == Piece.White) ? -8 : 8);
 				Square[movedTo] = 0;
 				Square[epIndex] = (int) capturedPiece;
 				pawns[opponentColourIndex].AddPieceAtSquare (epIndex);
 				ZobristKey ^= Zobrist.piecesArray[Piece.Pawn, opponentColourIndex, epIndex];
-			} else if (moveFlags == Move.Flag.Castling) { // castles: move rook back to starting square
+			} else if (moveFlags == Move.Flag.Castling) { 
 
 				bool kingside = movedTo == 6 || movedTo == 62;
 				int castlingRookFromIndex = (kingside) ? movedTo + 1 : movedTo - 2;
@@ -293,7 +272,7 @@ namespace Chess {
 
 			}
 
-			gameStateHistory.Pop (); // removes current state from history
+			gameStateHistory.Pop (); 
 			currentGameState = gameStateHistory.Peek (); // sets current state to previous state in history
 
 			fiftyMoveCounter = (int) (currentGameState & 4294950912) >> 14;
@@ -315,17 +294,14 @@ namespace Chess {
 
 		}
 
-		// Load the starting position
 		public void LoadStartPosition () {
 			LoadPosition (FenUtility.startFen);
 		}
 
-		// Load custom position from fen string
 		public void LoadPosition (string fen) {
 			Initialize ();
 			var loadedPosition = FenUtility.PositionFromFen (fen);
 
-			// Load pieces into board array and piece lists
 			for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
 				int piece = loadedPosition.squares[squareIndex];
 				Square[squareIndex] = piece;
@@ -351,13 +327,11 @@ namespace Chess {
 				}
 			}
 
-			// Side to move
 			WhiteToMove = loadedPosition.whiteToMove;
 			ColourToMove = (WhiteToMove) ? Piece.White : Piece.Black;
 			OpponentColour = (WhiteToMove) ? Piece.Black : Piece.White;
 			ColourToMoveIndex = (WhiteToMove) ? 0 : 1;
 
-			// Create gamestate
 			int whiteCastle = ((loadedPosition.whiteCastleKingside) ? 1 << 0 : 0) | ((loadedPosition.whiteCastleQueenside) ? 1 << 1 : 0);
 			int blackCastle = ((loadedPosition.blackCastleKingside) ? 1 << 2 : 0) | ((loadedPosition.blackCastleQueenside) ? 1 << 3 : 0);
 			int epState = loadedPosition.epFile << 4;
@@ -366,7 +340,6 @@ namespace Chess {
 			currentGameState = initialGameState;
 			plyCount = loadedPosition.plyCount;
 
-			// Initialize zobrist key
 			ZobristKey = Zobrist.CalculateZobristKey (this);
 		}
 
